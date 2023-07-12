@@ -55,7 +55,7 @@ Contributions to this project are welcome! If you would like to contribute, plea
 
 ## Additional Information
 
-- This scraper is designed to scrape data from over 1,438,000 products available on Maxbhi.com.
+- This scraper is designed to scrape more over 1,438,000 products available on Maxbhi.com.
 
 ## License
 
