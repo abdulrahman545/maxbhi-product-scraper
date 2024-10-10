@@ -1,0 +1,78 @@
+from bs4 import BeautifulSoup
+import csv
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def scrape_product_info(url):
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        product_info = {}
+
+        title_tag = soup.find('h1', class_='ty-product-block-title')
+        product_info['Title'] = title_tag.text.strip() if title_tag else ''
+
+        image_urls = [img.get("src", "") for img in soup.select('div.ty-product-img.cm-preview-wrapper img')]
+        product_info['Image URLs'] = image_urls
+
+        product_info['Description'] = (soup.find('div', id='content_description').text.strip()
+                                               if soup.find('div', id='content_description') else '')
+
+        product_info['Selling Price'] = (soup.find('div', class_='ty-product-block__price-actual').text.strip()
+                                           if soup.find('div', class_='ty-product-block__price-actual') else '')
+
+        product_info['List Price'] = (soup.find('span', class_='ty-strike').text.strip()
+                                           if soup.find('span', class_='ty-strike') else '')
+
+        stock_span = soup.select_one('div.ty-control-group.product-list-field span')
+        product_info['Availability'] = stock_span.text.strip() if stock_span else ''
+
+        code_span = soup.select_one('div.ty-product-block__sku span')
+        product_info['SKU'] = code_span.text.strip() if code_span else ''
+
+        breadcrumbs_parts = (soup.find('div', class_='ty-breadcrumbs clearfix').text.strip().split('/')
+                             if soup.find('div', class_='ty-breadcrumbs clearfix') else [])
+        product_info['Category 1'] = breadcrumbs_parts[-3].strip() if len(breadcrumbs_parts) >= 3 else ''
+        product_info['Category 2'] = breadcrumbs_parts[-2].strip() if len(breadcrumbs_parts) >= 3 else ''
+        product_info['Category 3'] = breadcrumbs_parts[-1].strip() if len(breadcrumbs_parts) >= 3 else ''
+        product_info['Product URL']= url
+        return product_info
+
+    except Exception as e:
+        print("Error occurred during scraping:", str(e))
+        return None
+
+csv_filename = "product_links.csv"
+output_file = "outputs.csv"
+
+with zipfile.ZipFile(zip_file_path, 'r') as z:
+    if csv_filename in z.namelist():
+        with z.open(csv_filename) as file:
+            reader = csv.DictReader(file.read().decode('utf-8').splitlines())
+            next(reader)
+
+            with open(output_file, 'w', newline='') as outfile:
+                writer = csv.DictWriter(outfile, fieldnames=['Title', 'Description', 'SKU', 'Availability',
+                                                            'Selling Price', 'List Price',
+                                                            'Category 1', 'Category 2', 'Category 3',
+                                                            'Image URLs', 'Product URL'])
+                writer.writeheader()
+
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = {}
+                    for counter, row in enumerate(reader, start=1):
+                        if counter < 0:  # Start (From row 1 in "product_links.csv")
+                            continue
+                        if counter > 1_000_000:  # End (to row 1,000,000 in "product_links.csv")
+                            break
+
+                        product_link = row['Product Links']
+                        futures[executor.submit(scrape_product_info, product_link)] = counter
+                    Counter = 1
+                    for future in as_completed(futures):
+                        result_dict = future.result()
+                        if result_dict:
+                            writer.writerow(result_dict)
+                        print(f"Processed row {Counter}")
+                        Counter += 1
